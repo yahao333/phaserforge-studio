@@ -330,6 +330,31 @@ const GamePreview: React.FC<GamePreviewProps> = ({ files, onError }) => {
           }
         }
 
+        if (module.exports && typeof module.exports === "function") {
+          const inferredExportName = targetFile.name.replace(
+            /\.(tsx|ts|js|json)$/,
+            "",
+          );
+          const functionName = module.exports.name;
+
+          if (
+            inferredExportName &&
+            (module.exports as any)[inferredExportName] === undefined
+          ) {
+            (module.exports as any)[inferredExportName] = module.exports;
+            customConsole.log(
+              `[游戏预览] 已为模块 '${targetFile.name}' 注入具名导出 '${inferredExportName}'，兼容 require 解构写法。`,
+            );
+          }
+
+          if (functionName && (module.exports as any)[functionName] === undefined) {
+            (module.exports as any)[functionName] = module.exports;
+            customConsole.log(
+              `[游戏预览] 已为模块 '${targetFile.name}' 注入具名导出 '${functionName}'，兼容 require 解构写法。`,
+            );
+          }
+        }
+
         return module.exports;
       };
 
