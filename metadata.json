@@ -1,0 +1,5 @@
+{
+  "name": "PhaserForge Studio",
+  "description": "一个基于Web的集成开发环境，专为Phaser游戏开发设计。包含代码编辑、实时预览、文件管理和控制台调试功能。",
+  "requestFramePermissions": []
+}
