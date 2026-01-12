@@ -65,15 +65,16 @@ const GamePreview: React.FC<GamePreviewProps> = ({ files, onError }) => {
       return;
     }
 
-    const mainFile = files.find((f) => f.name === "main.js");
+    const mainFile = files.find(
+      (f) => f.name === "main.ts" || f.name === "main.js",
+    );
     if (!mainFile) {
       onError(t("gamePreview.entryFileNotFound"));
       return;
     }
 
-    console.log("[游戏预览] 正在启动游戏实例... (模块化模式)");
+    console.log("[游戏预览] 正在启动游戏实例... (TypeScript 模块化模式)");
 
-    // 1. 彻底清理旧实例
     if (gameInstanceRef.current) {
       try {
         gameInstanceRef.current.destroy(true);
@@ -83,7 +84,6 @@ const GamePreview: React.FC<GamePreviewProps> = ({ files, onError }) => {
       }
     }
 
-    // 2. 重置 DOM 容器
     containerRef.current.innerHTML = "";
     const gameDiv = document.createElement("div");
     gameDiv.id = "game-container";
@@ -91,19 +91,16 @@ const GamePreview: React.FC<GamePreviewProps> = ({ files, onError }) => {
     gameDiv.style.height = "100%";
     containerRef.current.appendChild(gameDiv);
 
-    // 3. 准备执行环境
     try {
       const globalPhaser = (window as any).Phaser;
       if (!globalPhaser) {
         throw new Error(t("gamePreview.phaserEngineNotLoaded"));
       }
 
-      // 劫持 Phaser.Game 构造函数
       let capturedGame: any = null;
       class HijackedGame extends globalPhaser.Game {
         constructor(config: any) {
           const safeConfig = { ...config };
-          // 强制指定父容器，防止用户配置错误导致 Canvas 跑到外面
           if (safeConfig.scale) {
             safeConfig.scale.parent = "game-container";
           } else {
@@ -124,34 +121,121 @@ const GamePreview: React.FC<GamePreviewProps> = ({ files, onError }) => {
 
       const customConsole = (window as any).__custom_console__ || console;
 
-      // --- 4. 实现 CommonJS 模块系统 ---
       const moduleCache: Record<string, any> = {};
 
+      const stripTypeAnnotations = (code: string): string => {
+        let result = code;
+
+        result = result.replace(/:\s*\w+(\[\])?(\s*\|\s*\w+)*/g, "");
+        result = result.replace(/<\w+(\[\])?(\s*,\s*\w+)*>/g, "");
+        result = result.replace(/\s+as\s+\w+/g, "");
+        result = result.replace(/public\s+/g, "");
+        result = result.replace(/private\s+/g, "");
+        result = result.replace(/protected\s+/g, "");
+        result = result.replace(/readonly\s+/g, "");
+        result = result.replace(/abstract\s+/g, "");
+        result = result.replace(/implements\s+\w+(\s*,\s*\w+)*/g, "");
+        result = result.replace(/extends\s+\w+(\s*\.\s*\w+)*/g, "");
+        result = result.replace(/:\s*void/g, "");
+        result = result.replace(/:\s*any\b/g, "");
+        result = result.replace(/export\s+class\s+/g, "class ");
+        result = result.replace(/export\s+function\s+/g, "function ");
+        result = result.replace(/export\s+const\s+/g, "const ");
+        result = result.replace(/export\s+let\s+/g, "let ");
+        result = result.replace(/export\s+var\s+/g, "var ");
+        result = result.replace(/export\s+default\s+/g, "");
+        result = result.replace(/export\s+\{/g, "{");
+
+        return result;
+      };
+
+      const convertImportsToRequires = (code: string): string => {
+        let result = code;
+        result = result.replace(
+          /import\s+\{\s*([^}]*)\s*\}\s+from\s+['"]([^'"]+)['"]\s*;?/g,
+          (match, p1, p2) => `const { ${p1} } = require("${p2}");`,
+        );
+        result = result.replace(
+          /import\s+\*\s+as\s+(\w+)\s+from\s+['"]([^'"]+)['"]\s*;?/g,
+          (match, p1, p2) => `const ${p1} = require("${p2}");`,
+        );
+        result = result.replace(
+          /import\s+(\w+)\s+from\s+['"]([^'"]+)['"]\s*;?/g,
+          (match, p1, p2) => `const ${p1} = require("${p2}");`,
+        );
+        return result;
+      };
+
+      const convertToCommonJS = (code: string): string => {
+        let result = code;
+
+        result = result.replace(
+          /import\s+\{\s*([^}]*)\s*\}\s+from\s+['"]([^'"]+)['"]/g,
+          'const {$1} = require("$2")',
+        );
+
+        result = result.replace(
+          /import\s+\*\s+as\s+(\w+)\s+from\s+['"]([^'"]+)['"]/g,
+          'const $1 = require("$2")',
+        );
+
+        result = result.replace(
+          /import\s+(\w+)\s+from\s+['"]([^'"]+)['"]/g,
+          'const $1 = require("$2")',
+        );
+
+        result = result.replace(
+          /export\s+default\s+(class|function|const|let|var)?\s*(\w+)/g,
+          "const $2 = $1 ? $1 : class/function extends Object {}",
+        );
+
+        result = result.replace(
+          /export\s+(class|function|const|let|var)\s+(\w+)/g,
+          "$1 $2",
+        );
+
+        result = result.replace(/export\s+\{/g, "");
+        result = result.replace(/\}\s*;/g, ";");
+
+        result = result.replace(
+          /module\.exports\s*=\s*/g,
+          "window.__phaser_module__ = ",
+        );
+        result = result.replace(
+          /(const|let|var)\s+(\w+)\s*=\s*module\.exports/g,
+          "$1 $2 = window.__phaser_module__",
+        );
+
+        return result;
+      };
+
       const customRequire = (path: string) => {
-        // 路径标准化：移除 ./ 前缀
         let targetName = path.replace(/^\.\//, "");
 
-        // 尝试补全后缀
+        const searchExtensions = [".ts", ".tsx", ".js", ".json"];
         let targetFile = files.find((f) => f.name === targetName);
-        if (!targetFile)
-          targetFile = files.find((f) => f.name === targetName + ".js");
-        if (!targetFile)
-          targetFile = files.find((f) => f.name === targetName + ".json");
+
+        if (!targetFile) {
+          for (const ext of searchExtensions) {
+            const found = files.find((f) => f.name === targetName + ext);
+            if (found) {
+              targetFile = found;
+              break;
+            }
+          }
+        }
 
         if (!targetFile) {
           throw new Error(`Cannot find module '${path}'`);
         }
 
-        // 检查缓存
         if (moduleCache[targetFile.name]) {
           return moduleCache[targetFile.name].exports;
         }
 
-        // 初始化模块对象
         const module = { exports: {} as any };
         moduleCache[targetFile.name] = module;
 
-        // 处理 JSON 文件
         if (
           targetFile.language === "json" ||
           targetFile.name.endsWith(".json")
@@ -166,15 +250,29 @@ const GamePreview: React.FC<GamePreviewProps> = ({ files, onError }) => {
           return module.exports;
         }
 
-        // 执行 JS 模块
         try {
+          let processedCode = targetFile.content;
+
+          const hasTypeAnnotations =
+            /(?:^|[=:(]\s*|function\s+\w+\s*\()\s*:\s*\w+/.test(processedCode);
+
+          const hasES6Imports =
+            /import\s+.*\s+from\s+['"]|export\s+(class|function|const|let|var|default)/.test(
+              processedCode,
+            );
+
+          if (hasTypeAnnotations || hasES6Imports) {
+            processedCode = stripTypeAnnotations(processedCode);
+            processedCode = convertImportsToRequires(processedCode);
+          }
+
           const wrapper = new Function(
             "require",
             "module",
             "exports",
             "console",
             "Phaser",
-            `${targetFile.content}\n//# sourceURL=${targetFile.name}`,
+            `${processedCode}\n//# sourceURL=${targetFile.name}`,
           );
 
           wrapper(
@@ -190,11 +288,7 @@ const GamePreview: React.FC<GamePreviewProps> = ({ files, onError }) => {
           );
         }
 
-        // --- 增强：自动为 Phaser Scene 添加错误边界 ---
-        // 如果导出的是一个类，并且继承自 Phaser.Scene，我们劫持它的生命周期方法以捕获运行时错误
         if (module.exports && typeof module.exports === "function") {
-          // 检查原型链是否包含 Phaser.Scene
-          // 注意：这里使用 globalPhaser 而不是 Proxy，确保 instanceof 检查正确
           if (
             globalPhaser.Scene &&
             module.exports.prototype instanceof globalPhaser.Scene
@@ -212,13 +306,9 @@ const GamePreview: React.FC<GamePreviewProps> = ({ files, onError }) => {
                   } catch (err: any) {
                     const errorMsg = `[Runtime Error] ${className}.${method}(): ${err.message}`;
 
-                    // 1. 输出到控制台
                     customConsole.error(errorMsg, err);
-
-                    // 2. 通知 UI
                     onError(errorMsg);
 
-                    // 3. 紧急处理：如果是在 update 中报错，通常会无限循环，所以尝试暂停场景
                     if (this.scene && typeof this.scene.pause === "function") {
                       try {
                         this.scene.pause();
@@ -228,12 +318,9 @@ const GamePreview: React.FC<GamePreviewProps> = ({ files, onError }) => {
                             className,
                           ),
                         );
-                      } catch (pauseErr) {
-                        // 忽略暂停失败
-                      }
+                      } catch (pauseErr) {}
                     }
 
-                    // 抛出错误以便中断当前帧的后续逻辑
                     throw err;
                   }
                 };
@@ -246,15 +333,14 @@ const GamePreview: React.FC<GamePreviewProps> = ({ files, onError }) => {
         return module.exports;
       };
 
-      // 5. 启动入口文件
-      customRequire("main.js");
+      const entryFileName = mainFile.name.replace(/\.(ts|js)$/, "");
+      const entryPath = mainFile.name.endsWith(".ts") ? "./main" : "./main.js";
+      customRequire(entryPath);
 
-      // 6. 验证启动结果
       if (capturedGame) {
         gameInstanceRef.current = capturedGame;
         setIsRunning(true);
       } else {
-        // 异步创建或仅 Canvas 存在的情况
         setTimeout(() => {
           if (containerRef.current?.querySelector("canvas")) {
             setIsRunning(true);
@@ -265,7 +351,6 @@ const GamePreview: React.FC<GamePreviewProps> = ({ files, onError }) => {
       }
     } catch (err: any) {
       console.error("[游戏预览] 初始化/编译错误:", err);
-      // 确保错误信息显示在 UI 上
       onError(
         t("gamePreview.startupFailed").replace(
           "{error}",
