@@ -11,17 +11,60 @@ interface GamePreviewProps {
 const GamePreview: React.FC<GamePreviewProps> = ({ files, onError }) => {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
-  const gameInstanceRef = useRef<any>(null); // 存储 Phaser.Game 实例引用
+  const gameInstanceRef = useRef<any>(null);
   const [isRunning, setIsRunning] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0); // 用于手动强制刷新
-  const [autoReload, setAutoReload] = useState(true); // 默认开启热重载
-  const prevFilesRef = useRef<string>(""); // 用于比较文件内容变化
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [autoReload, setAutoReload] = useState(true);
+  const prevFilesRef = useRef<string>("");
+  const [phaserLoaded, setPhaserLoaded] = useState(false);
+  const [phaserLoadError, setPhaserLoadError] = useState<string | null>(null);
 
-  // 核心函数：运行游戏
+  useEffect(() => {
+    const checkPhaser = () => {
+      if ((window as any).Phaser) {
+        setPhaserLoaded(true);
+        setPhaserLoadError(null);
+      } else {
+        setPhaserLoaded(false);
+        setPhaserLoadError(t("gamePreview.phaserEngineNotLoaded"));
+      }
+    };
+
+    checkPhaser();
+    const interval = setInterval(checkPhaser, 1000);
+    return () => clearInterval(interval);
+  }, [t]);
+
+  const handleLoadPhaser = async () => {
+    setPhaserLoadError(t("gamePreview.loading"));
+    try {
+      const script = document.createElement("script");
+      script.src =
+        "https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js";
+      script.onload = () => {
+        setPhaserLoaded(true);
+        setPhaserLoadError(null);
+        console.log("[游戏预览] Phaser 引擎已手动加载");
+      };
+      script.onerror = () => {
+        setPhaserLoadError(t("gamePreview.phaserEngineNotLoaded"));
+      };
+      document.head.appendChild(script);
+    } catch (e: any) {
+      setPhaserLoadError(e.message || "Failed to load Phaser");
+    }
+  };
+
   const runGame = () => {
     if (!containerRef.current) return;
 
-    // 查找入口文件
+    const globalPhaser = (window as any).Phaser;
+    if (!globalPhaser) {
+      onError(t("gamePreview.phaserEngineNotLoaded"));
+      setPhaserLoadError(t("gamePreview.phaserEngineNotLoaded"));
+      return;
+    }
+
     const mainFile = files.find((f) => f.name === "main.js");
     if (!mainFile) {
       onError(t("gamePreview.entryFileNotFound"));
@@ -235,7 +278,8 @@ const GamePreview: React.FC<GamePreviewProps> = ({ files, onError }) => {
 
   // 监听文件变化实现热重载
   useEffect(() => {
-    // 创建一个简单的指纹来检测内容变化
+    if (!phaserLoaded) return;
+
     const currentFilesFingerprint = JSON.stringify(
       files.map((f) => ({ n: f.name, c: f.content })),
     );
@@ -251,7 +295,7 @@ const GamePreview: React.FC<GamePreviewProps> = ({ files, onError }) => {
       }, 200);
       return () => clearTimeout(timer);
     }
-  }, [files, refreshKey, autoReload]);
+  }, [files, refreshKey, autoReload, phaserLoaded]);
 
   const handleManualReload = () => {
     console.log("[游戏预览] 用户触发手动重载");
@@ -307,8 +351,24 @@ const GamePreview: React.FC<GamePreviewProps> = ({ files, onError }) => {
       <div className="flex-1 relative overflow-hidden flex items-center justify-center bg-[#111]">
         <div ref={containerRef} className="w-full h-full" />
 
-        {/* 状态提示 */}
-        {!isRunning && (
+        {!phaserLoaded && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+            <div className="text-red-400 flex flex-col items-center bg-black/80 p-6 rounded-lg backdrop-blur-sm border border-red-800">
+              <Play size={32} className="mb-2 opacity-50" />
+              <span className="text-sm mb-3">
+                {phaserLoadError || t("gamePreview.phaserEngineNotLoaded")}
+              </span>
+              <button
+                onClick={handleLoadPhaser}
+                className="pointer-events-auto px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs transition-colors"
+              >
+                {t("gamePreview.reload")}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!isRunning && phaserLoaded && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
             <div className="text-gray-600 flex flex-col items-center bg-black/50 p-4 rounded-lg backdrop-blur-sm">
               <Play size={32} className="mb-2 opacity-50" />

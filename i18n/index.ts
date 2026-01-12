@@ -94,6 +94,10 @@ export interface Translations {
     forceRerun: string;
     reloadRun: string;
     waitingForCode: string;
+    entryFileNotFound: string;
+    phaserEngineNotLoaded: string;
+    startupFailed: string;
+    scenePausedProtection: string;
   };
   console: {
     title: string;
