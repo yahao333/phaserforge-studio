@@ -53,6 +53,13 @@ PhaserForge Studio 是一个面向 Phaser 游戏开发的 Web 迷你 IDE：包�
 3. Open:
    - http://localhost:3000/
 
+If you prefer pnpm:
+
+```bash
+pnpm install
+pnpm dev
+```
+
 ## Build & Preview
 
 ```bash
@@ -87,6 +94,8 @@ If you still want to set it:
 - Port already in use: change `server.port` in [vite.config.ts](vite.config.ts).
 
 ---
+
+## 中文说明
 
 <details>
   <summary><strong>中文说明</strong></summary>
