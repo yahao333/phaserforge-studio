@@ -2,7 +2,7 @@ import { ProjectFile, WindowId, WindowState } from "./types";
 
 // 游戏主场景代码 (使用 module.exports 导出类)
 const GAME_SCENE_CODE = `// GameScene.js
-// 引入依赖
+// Import dependencies
 const { createEmitter } = require('./utils.js');
 
 class GameScene extends Phaser.Scene {
@@ -20,7 +20,7 @@ class GameScene extends Phaser.Scene {
     create() {
         this.add.image(400, 300, 'sky');
 
-        // 使用从 utils.js 导入的函数
+        // Use a helper imported from utils.js
         createEmitter(this, 'red', 'logo');
 
         const logo = this.physics.add.image(400, 100, 'logo');
@@ -28,7 +28,7 @@ class GameScene extends Phaser.Scene {
         logo.setBounce(1, 1);
         logo.setCollideWorldBounds(true);
         
-        // 简单的交互
+        // Simple interaction
         logo.setInteractive();
         logo.on('pointerdown', () => {
             logo.setVelocityY(-300);
@@ -39,12 +39,12 @@ class GameScene extends Phaser.Scene {
     }
 }
 
-// 导出类
+// Export the class
 module.exports = GameScene;`;
 
 // 工具函数代码 (导出函数)
 const UTILS_CODE = `// utils.js
-// 这个文件演示了如何导出工具函数
+// This file demonstrates how to export helper functions
 
 function createEmitter(scene, particleKey, followTargetKey) {
     const particles = scene.add.particles(0, 0, particleKey, {
@@ -67,8 +67,8 @@ module.exports = {
 };`;
 
 // 入口文件代码 (使用 require 导入场景)
-const MAIN_CODE = `// main.js - 游戏入口文件
-// 通过 require 导入其他文件定义的类
+const MAIN_CODE = `// main.js - Game entry file
+// Import classes defined in other files via require
 const GameScene = require('./GameScene.js');
 
 const config = {
@@ -82,7 +82,7 @@ const config = {
             gravity: { y: 200 }
         }
     },
-    // 将导入的 Scene 类加入列表
+    // Add the imported Scene class to the scene list
     scene: [GameScene]
 };
 
@@ -126,7 +126,7 @@ export const INITIAL_FILES: ProjectFile[] = [
 export const DEFAULT_WINDOWS: Record<WindowId, WindowState> = {
     [WindowId.EXPLORER]: {
         id: WindowId.EXPLORER,
-        title: '资源管理器',
+        title: 'Explorer',
         isOpen: true,
         isMinimized: false,
         isMaximized: false,
@@ -137,7 +137,7 @@ export const DEFAULT_WINDOWS: Record<WindowId, WindowState> = {
     },
     [WindowId.EDITOR]: {
         id: WindowId.EDITOR,
-        title: '代码编辑器',
+        title: 'Code Editor',
         isOpen: true,
         isMinimized: false,
         isMaximized: false,
@@ -148,7 +148,7 @@ export const DEFAULT_WINDOWS: Record<WindowId, WindowState> = {
     },
     [WindowId.PREVIEW]: {
         id: WindowId.PREVIEW,
-        title: '游戏预览',
+        title: 'Game Preview',
         isOpen: true,
         isMinimized: false,
         isMaximized: false,
@@ -159,7 +159,7 @@ export const DEFAULT_WINDOWS: Record<WindowId, WindowState> = {
     },
     [WindowId.CONSOLE]: {
         id: WindowId.CONSOLE,
-        title: '调试控制台',
+        title: 'Console',
         isOpen: true,
         isMinimized: false,
         isMaximized: false,

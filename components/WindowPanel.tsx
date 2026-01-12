@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { WindowState } from '../types';
 import { Maximize2, Minimize2, X, Minus } from 'lucide-react';
+import { useI18n } from '../i18nContext';
 
 interface WindowPanelProps {
     windowState: WindowState;
@@ -15,6 +16,9 @@ interface WindowPanelProps {
  * 功能：支持拖动、调整大小、最大化、最小化、层级管理
  */
 const WindowPanel: React.FC<WindowPanelProps> = ({ windowState, onUpdate, onClose, onFocus, children }) => {
+    // 获取翻译函数
+    const { t } = useI18n();
+
     // 引用面板DOM以直接操作位置，避免React渲染周期的卡顿，但为了状态同步最终还是会更新state
     const panelRef = useRef<HTMLDivElement>(null);
     
@@ -196,13 +200,13 @@ const WindowPanel: React.FC<WindowPanelProps> = ({ windowState, onUpdate, onClos
                     {windowState.title}
                 </div>
                 <div className="flex items-center gap-1" onMouseDown={(e) => e.stopPropagation()}>
-                    <button onClick={toggleMinimize} className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors" title="最小化">
+                    <button onClick={toggleMinimize} className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors" title={t("windowPanel.minimize")}>
                         <Minus size={14} />
                     </button>
-                    <button onClick={toggleMaximize} className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors" title="最大化">
+                    <button onClick={toggleMaximize} className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors" title={t("windowPanel.maximize")}>
                         <Maximize2 size={14} />
                     </button>
-                    <button onClick={onClose} className="p-1 hover:bg-red-600 rounded text-gray-400 hover:text-white transition-colors" title="关闭">
+                    <button onClick={onClose} className="p-1 hover:bg-red-600 rounded text-gray-400 hover:text-white transition-colors" title={t("windowPanel.close")}>
                         <X size={14} />
                     </button>
                 </div>
